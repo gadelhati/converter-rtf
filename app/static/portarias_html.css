@@ -131,3 +131,13 @@ img.brasao-gov{
         padding-left: 0!important;
     }
 }
+/* Sumário automático */
+.sumario { margin: 2em 0; }
+.sumario h3 { text-align: center; }
+.sumario ul { list-style: none; padding-left: 0; }
+.sumario li { margin: 0.3em 0; }
+.sumario li.nivel-2 { padding-left: 1.5em; }
+.sumario li.nivel-3 { padding-left: 3em; }
+.sumario li.nivel-4 { padding-left: 4.5em; }
+.sumario a { text-decoration: none; }
+.sumario a:hover { text-decoration: underline; }

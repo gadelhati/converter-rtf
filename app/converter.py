@@ -36,6 +36,8 @@ _LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)\s]+)\)")
 _IMG_RE = re.compile(r"^\(INSERIR AQUI A IMAGEM\s+(.+?)\)\s*$", re.IGNORECASE)
 _ART_RE = re.compile(r"^Art\.\s*\d+", re.IGNORECASE)
 _ITEM_RE = re.compile(r"^([IVXLCDM]+\s*[-–—]|[a-z]\)|§\s*\d+|Parágrafo único)", re.IGNORECASE)
+_SECAO_RE = re.compile(r"^(\d+(?:\.\d+)*)\.?\s*[-–—)]?\s*(?=[A-Za-zÀ-ÿ])")
+_CAP_RE = re.compile(r"^(CAP[IÍ]TULO|SE[CÇ][AÃ]O|T[IÍ]TULO)\s+([IVXLCDM]+|\d+)\b", re.IGNORECASE)
 _RODAPE_RE = re.compile(r"^Este texto não substitui", re.IGNORECASE)
 
 
@@ -263,6 +265,7 @@ class Documento:
     revogado: bool = False
     titulo_riscado: bool = False
     ementa_riscada: bool = False
+    sumario: list[tuple[str, str, int]] = field(default_factory=list)  # (id, html, nível)
 
 
 def parse(lines, revogado: bool = False) -> Documento:
@@ -332,8 +335,19 @@ def parse(lines, revogado: bool = False) -> Documento:
         else:
             el = f'<p class="{cls_r.strip()}">{conteudo}</p>' if riscado else f"<p>{conteudo}</p>"
 
+        sec = None if img or "ANE" in tags else (_SECAO_RE.match(line) or _CAP_RE.match(line))
+        if sec and _SECAO_RE.match(line) and len(line) > 200:
+            sec = None  # parágrafo longo numerado não é título de seção
+        if sec:
+            num = sec.group(1) if sec.re is _SECAO_RE else f"{sec.group(1)}-{sec.group(2)}"
+            sid = "secao-" + re.sub(r"[^0-9A-Za-z]+", "-", num).lower()
+            if any(x[0] == sid for x in doc.sumario):
+                sid += f"-{len(doc.sumario)}"
+            doc.sumario.append((sid, conteudo, num.count(".") + 1 if sec.re is _SECAO_RE else 1))
+            el = el.replace("<p", f'<p id="{sid}"', 1)
+
         if secao in ("anexo", "pos"):
-            doc.anexos.append(f"<h3>{conteudo}</h3>" if "LNK" in tags and secao == "anexo" else el)
+            doc.anexos.append(f"<h3>{conteudo}</h3>" if "LNK" in tags and secao == "anexo" and not sec else el)
         else:
             doc.texto.append(el)
             if secao in ("inicio", "ementa"):
@@ -388,6 +402,8 @@ def render(doc: Documento, om: str = "DIRETORIA DE HIDROGRAFIA E NAVEGAÇÃO") -
         '        <div class="ementa">',
         f"            <p{ementa_cls}>{ementa_html}</p>",
         "        </div>",
+    ]
+    partes += [
         f'        <div class="texto-documento{rev}">',
         corpo,
     ]
@@ -395,6 +411,12 @@ def render(doc: Documento, om: str = "DIRETORIA DE HIDROGRAFIA E NAVEGAÇÃO") -
         partes += ['            <div class="assinatura">', assinatura, "            </div>"]
     if doc.rodape:
         partes.append(f'            <p class="rodape">{doc.rodape}</p>')
+    if doc.sumario:
+        partes += ['            <nav class="sumario">', "                <h3>SUMÁRIO</h3>", "                <ul>"]
+        partes += [
+            f'                    <li class="nivel-{n}"><a href="#{i}">{t}</a></li>' for i, t, n in doc.sumario
+        ]
+        partes += ["                </ul>", "            </nav>"]
     if anexos:
         partes.append(anexos)
     partes += ["        </div>", "    </div>", "</body>", "</html>", ""]

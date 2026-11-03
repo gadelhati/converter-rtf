@@ -86,3 +86,43 @@ def test_link():
     h = convert_rtf(RTF2)
     assert '<a href="https://exemplo.mil.br/a.pdf" target="_blank">Ver anexo</a>' in h
     assert "(https://" not in h
+
+
+RTF3 = rb"""{\rtf1\ansi\ansicpg1252{\fonttbl{\f0 Arial;}}
+##ATO PORTARIA N\'ba 6\par
+##EME Aprova normas.\par
+##TEX 1. INTRODU\'c7\'c3O\par
+Texto qualquer.\par
+1.1 Objetivo\par
+2. {\b DEFINI\'c7\'d5ES}\par
+##ASS FULANO\par
+##ANE ANEXO A\par
+1. Item do anexo\par
+}"""
+
+
+def test_sumario_sem_anexos():
+    h = convert_rtf(RTF3)
+    nav = h.split('<nav class="sumario">')[1].split("</nav>")[0]
+    assert '<a href="#secao-1">1. INTRODUÇÃO</a>' in nav
+    assert '<li class="nivel-2"><a href="#secao-1-1">1.1 Objetivo</a>' in nav
+    assert "<strong>DEFINIÇÕES</strong>" in nav
+    assert "ANEXO A" not in nav
+    assert "Item do anexo" in nav
+    assert '<p id="secao-1">1. INTRODUÇÃO</p>' in h
+    assert nav.count("<li") == 4
+
+
+def test_secao_no_anexo_e_capitulo():
+    rtf = rb"""{\rtf1\ansi ##ATO PORTARIA 7\par ##EME Aprova.\par Art. 1\'ba Aprovar.\par ##ASS FULANO\par ##ANE ANEXO\par CAP\'cdTULO I\par 1.1\tab Generalidades\par}"""
+    nav = convert_rtf(rtf).split('<nav class="sumario">')[1].split("</nav>")[0]
+    assert "CAPÍTULO I" in nav and "Generalidades" in nav and "ANEXO" not in nav
+
+
+def test_sem_secoes_sem_sumario():
+    assert "sumario" not in convert_rtf(RTF2)
+
+
+def test_sumario_depois_do_rodape():
+    h = convert_rtf(RTF3.replace(b"##ANE", b"##DOU Este texto n\\'e3o substitui.\\par\n##ANE"))
+    assert h.index('class="assinatura"') < h.index('class="rodape"') < h.index('class="sumario"') < h.index("ANEXO A")
