@@ -47,3 +47,42 @@ def test_api_zip():
     r = c.post("/api/convert", files=[("files", ("p31.rtf", RTF, "application/rtf"))])
     assert r.status_code == 200 and r.headers["content-type"] == "application/zip"
     assert c.post("/api/convert", files=[("files", ("x.txt", b"x"))]).status_code == 400
+
+
+RTF2 = rb"""{\rtf1\ansi\ansicpg1252{\fonttbl{\f0 Arial;}}
+##ATO PORTARIA N\'ba 5\par
+##EME Disp\'f5e sobre {\i navios}.\par
+##TEX Art. 1\'ba Volume de 10 m{\super 3} e H{\sub 2}O, {\b importante} e {\i it\'e1lico}.\par
+##TCH Art. 2\'ba Revogado.\par
+##ASS\par
+JO\'c3O DA SILVA\par
+##ASS Contra-Almirante\par
+##ASS Diretor\par
+##DOU Este texto n\'e3o substitui o publicado no DOU.\par
+##LNK (https://exemplo.mil.br/a.pdf) [Ver anexo]\par
+}"""
+
+
+def test_sobrescrito_e_formatacao():
+    h = convert_rtf(RTF2)
+    assert "10 m<sup>3</sup>" in h
+    assert "H<sub>2</sub>O" in h
+    assert "<strong>importante</strong>" in h
+    assert "<em>itálico</em>" in h
+    assert "sobre <em>navios</em>." in h
+    assert '<p class="artigo riscado">Art. 2º Revogado.</p>' in h
+
+
+def test_assinatura_completa_na_div():
+    h = convert_rtf(RTF2)
+    div = h.split('<div class="assinatura">')[1].split("</div>")[0]
+    assert '<h3 class="nome">JOÃO DA SILVA</h3>' in div
+    assert '<h3 class="posto">Contra-Almirante</h3>' in div
+    assert '<h3 class="função">Diretor</h3>' in div
+    assert h.count("JOÃO DA SILVA") == 1
+
+
+def test_link():
+    h = convert_rtf(RTF2)
+    assert '<a href="https://exemplo.mil.br/a.pdf" target="_blank">Ver anexo</a>' in h
+    assert "(https://" not in h
